@@ -3,41 +3,47 @@ import os
 
 # --- CONFIGURATION ---
 
-# Folder where your CSV files are stored
-folder_path = 'path_to_your_folder'  # <-- change this to your actual folder path
+# Folder containing .xlsx files
+folder_path = os.path.abspath('path_to_your_folder')  # 🔁 Change this
 
-# Name of the final combined output file
-output_file = 'combined_cleaned_output.csv'
+# Output CSV file path
+output_file = os.path.abspath('combined_output.csv')
 
-# How many rows to skip at the top of each CSV file
+# How many rows to skip at the beginning
 rows_to_skip = 6
 
-# Size of chunks to read (tune based on memory and performance)
-chunk_size = 10000
+# Get all .xlsx files in folder
+file_list = [f for f in os.listdir(folder_path) if f.endswith('.xlsx') or f.endswith('.xls')]
 
-# --- PROCESSING ---
+if not file_list:
+    print("❌ No Excel files found in the folder.")
+else:
+    print(f"✅ Found {len(file_list)} Excel files.\n")
 
-# Get list of all CSV files in the folder
-file_list = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
-
-# Flag to control whether to write headers or not
+# Track whether to write header
 first_file = True
 
-# Loop through each CSV file
+# Loop through all Excel files
 for file in file_list:
     file_path = os.path.join(folder_path, file)
-    
-    print(f"Processing file: {file}")
+    print(f"📄 Reading: {file}")
 
-    # Read in chunks, skipping initial metadata rows
-    chunk_iter = pd.read_csv(file_path, skiprows=rows_to_skip, chunksize=chunk_size)
+    try:
+        # Read while skipping metadata/header rows
+        df = pd.read_excel(file_path, skiprows=rows_to_skip)
 
-    for chunk in chunk_iter:
-        # Optional: add a column to track source file
-        chunk['Source File'] = file
+        if not df.empty:
+            df['Source File'] = file  # Optional: track origin
 
-        # Write to output file (append mode)
-        chunk.to_csv(output_file, mode='a', index=False, header=first_file)
-        first_file = False  # After the first chunk, don't write headers again
+            # Append to CSV
+            df.to_csv(output_file, mode='a', index=False, header=first_file)
+            first_file = False
+            print(f"   ✅ Appended to output")
 
-print(f"\n✅ All files combined successfully into: {output_file}")
+        else:
+            print(f"   ⚠️ Skipped empty file: {file}")
+
+    except Exception as e:
+        print(f"   ❌ Error reading {file}: {e}")
+
+print(f"\n🎉 All files combined successfully into:\n{output_file}")
