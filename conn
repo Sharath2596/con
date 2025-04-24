@@ -1,8 +1,9 @@
 import pandas as pd
 import os
 import json
+import concurrent.futures
 
-# --- Load column names from schema ---
+# --- Load schema ---
 schema_path = 'C:/Users/8216609/OneDrive - Standard Chartered Bank/Documents/VSCode/Project1/Output/schemas.json'
 schemas = json.load(open(schema_path))
 cdr = "Caller Details"
@@ -14,48 +15,51 @@ folder_path = os.path.abspath("C:/Users/8216609/OneDrive - Standard Chartered Ba
 output_file = os.path.abspath('combined_output.csv')
 rows_to_skip = 6
 
-# Get list of Excel files
+# List of Excel files
 file_list = [f for f in os.listdir(folder_path) if f.endswith('.xlsx') or f.endswith('.xls')]
 
 if not file_list:
-    print("❌ No Excel files found in the folder.")
+    print("❌ No Excel files found.")
 else:
-    print(f"✅ Found {len(file_list)} Excel files.\n")
+    print(f"✅ Found {len(file_list)} files. Processing...\n")
 
-first_file = True
-
-# Loop through each file
-for file in file_list:
-    file_path = os.path.join(folder_path, file)
+# --- Worker function to process one file ---
+def process_file(file):
     ext = os.path.splitext(file)[1].lower()
+    file_path = os.path.join(folder_path, file)
 
-    print(f"📄 Reading: {file}")
     try:
         if ext == ".xlsx":
-            # Read Excel skipping 6 rows
-            df = pd.read_excel(file_path, skiprows=rows_to_skip, header=None)
+            df = pd.read_excel(file_path, skiprows=rows_to_skip, header=None, engine='openpyxl')
         elif ext == ".xls":
-            # Read old .xls file as CSV style and split columns
             raw_data = pd.read_csv(file_path, skiprows=rows_to_skip, header=None, usecols=[1])
             df_split = raw_data.iloc[:, 0].astype(str).str.split('\t', expand=True)
-            df = df_split.drop(0).reset_index(drop=True)
+            df = df_split.drop(0)
         else:
-            print(f"⚠️ Unsupported format: {file}")
-            continue
+            return None
 
-        # Apply predefined column names
+        # Assign schema-based columns
         df.columns = column_name[:df.shape[1]]
-
-        # Add source file column
         df['Source File'] = file
-
-        # Append to final CSV
-        df.to_csv(output_file, mode='a', index=False, header=first_file)
-        first_file = False
-
-        print(f"   ✅ Appended to output")
+        return df
 
     except Exception as e:
-        print(f"   ❌ Error processing {file}: {e}")
+        print(f"❌ Error in file {file}: {e}")
+        return None
 
-print(f"\n🎉 All files combined successfully into:\n{output_file}")
+# --- Parallel Processing ---
+all_dataframes = []
+
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    results = executor.map(process_file, file_list)
+    for df in results:
+        if df is not None:
+            all_dataframes.append(df)
+
+# --- Concatenate and save ---
+if all_dataframes:
+    final_df = pd.concat(all_dataframes, ignore_index=True)
+    final_df.to_csv(output_file, index=False)
+    print(f"\n🎉 Successfully combined all files into:\n{output_file}")
+else:
+    print("⚠️ No valid data found to combine.")
