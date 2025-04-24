@@ -1,22 +1,43 @@
 import pandas as pd
 import os
 
-# Folder containing the CSV files
-folder_path = 'path_to_your_folder'
+# --- CONFIGURATION ---
+
+# Folder where your CSV files are stored
+folder_path = 'path_to_your_folder'  # <-- change this to your actual folder path
+
+# Name of the final combined output file
 output_file = 'combined_cleaned_output.csv'
 
-# List all CSV files in the folder
+# How many rows to skip at the top of each CSV file
+rows_to_skip = 6
+
+# Size of chunks to read (tune based on memory and performance)
+chunk_size = 10000
+
+# --- PROCESSING ---
+
+# Get list of all CSV files in the folder
 file_list = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
 
-# Track if we're writing the first file (to include header)
+# Flag to control whether to write headers or not
 first_file = True
 
+# Loop through each CSV file
 for file in file_list:
     file_path = os.path.join(folder_path, file)
+    
+    print(f"Processing file: {file}")
 
-    # Use chunking for memory efficiency
-    chunk_iter = pd.read_csv(file_path, skiprows=6, chunksize=10000)
+    # Read in chunks, skipping initial metadata rows
+    chunk_iter = pd.read_csv(file_path, skiprows=rows_to_skip, chunksize=chunk_size)
 
     for chunk in chunk_iter:
+        # Optional: add a column to track source file
+        chunk['Source File'] = file
+
+        # Write to output file (append mode)
         chunk.to_csv(output_file, mode='a', index=False, header=first_file)
-        first_file = False  # Only include header once
+        first_file = False  # After the first chunk, don't write headers again
+
+print(f"\n✅ All files combined successfully into: {output_file}")
